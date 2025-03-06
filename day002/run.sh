@@ -4,5 +4,5 @@
 # nvcc -arch sm_80 checkDimension.cu -o checkdim
 # ./checkdim
 
-nvcc -arch sm_80 sumArraysOnHost.cu -o sumcuda
+nvcc -arch sm_80 sumArraysOnGPU.cu -o sumcuda
 ./sumcuda
