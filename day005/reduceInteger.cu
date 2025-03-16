@@ -58,7 +58,27 @@ __global__ void reduceNeighboredLess(int *g_idata, int *g_odata, unsigned int n)
     }
 
     if (tid == 0) {
-        g_odata[blockIdx.x] = idata[idx];
+        g_odata[blockIdx.x] = idata[0];
+    }
+}
+
+__global__ void reduceNeighboredInterleaved(int *g_idata, int *g_odata, unsigned int n) {
+    unsigned int tid = threadIdx.x;
+    unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= n) return;
+
+    int *idata = g_idata + blockIdx.x * blockDim.x; // offset to access each block's data
+
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride) {
+            idata[tid] = FUN(idata[tid], idata[tid + stride]);
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0) {
+        g_odata[blockIdx.x] = idata[0];
     }
 }
 
@@ -89,7 +109,7 @@ int main(int argc, char **argv){
     int *tmp = (int *)malloc(bytes);
 
     for (int i = 0; i < size; i++){
-        h_idata[i] = (int)(rand());// & 0xFF); // 0 - 255
+        h_idata[i] = (int)(rand() & 0xFF); // 0 - 255
     }
     memcpy(tmp, h_idata, bytes);
 
@@ -131,7 +151,21 @@ int main(int argc, char **argv){
     for (int i = 0; i < grid.x; i++){
         gpu_sum = FUN(gpu_sum, h_odata[i]);
     }
-    printf("reduceNeighbored <<<%d, %d>>> elapsed %f sec result %d\n", grid.x, block.x, iElaps, gpu_sum);
+    printf("reduceNeighboredLess <<<%d, %d>>> elapsed %f sec result %d\n", grid.x, block.x, iElaps, gpu_sum);
+
+    // kernel 3: reduceNeighboredInterleaved
+    cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
+    iStart = cpuSecond();
+    reduceNeighboredInterleaved<<<grid, block>>>(d_idata, d_odata, size);
+    cudaDeviceSynchronize();
+    iElaps = cpuSecond() - iStart;
+    cudaMemcpy(h_odata, d_odata, grid.x * sizeof(int), cudaMemcpyDeviceToHost);
+    gpu_sum = 0;
+    for (int i = 0; i < grid.x; i++){
+        gpu_sum = FUN(gpu_sum, h_odata[i]);
+    }
+    printf("reduceNeighboredInterleaved <<<%d, %d>>> elapsed %f sec result %d\n", grid.x, block.x, iElaps, gpu_sum);
 
 
     free(h_idata);
