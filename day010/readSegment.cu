@@ -72,6 +72,18 @@ __global__ void sumArraysOnGPUOffset(float *A, float *B, float *C, const int N, 
     if (k < N) C[i] = A[k] + B[k];
 }
 
+__global__ void sumArraysOnGPUOffsetUnroll4(float *A, float *B, float *C, const int N, bool printDim, int offset) {
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = i + offset;
+    if (k + blockDim.x * 3 < N) {
+        C[i] = A[k] + B[k];
+        C[i + blockDim.x] = A[k + blockDim.x] + B[k + blockDim.x];
+        C[i + blockDim.x * 2] = A[k + blockDim.x * 2] + B[k + blockDim.x * 2];
+        C[i + blockDim.x * 3] = A[k + blockDim.x * 3] + B[k + blockDim.x * 3];
+    }
+}
+
 void printArray(float *op, const int N) {
     for (int i=0; i<N; i++) {
         printf("%f ", op[i]);
@@ -135,6 +147,12 @@ int main (int argc, char **argv) {
     cudaDeviceSynchronize();
     iElaps = cpuSecond() - istart;
     printf("Executed configuration <<< %d, %d>>> with %d in %.5f seconds\n", grid.x, block.x, offset, iElaps);
+
+    istart = cpuSecond();
+    sumArraysOnGPUOffsetUnroll4 <<<grid, block >>> (d_A, d_B, d_C, nElem, printDim, offset);
+    cudaDeviceSynchronize();
+    iElaps = cpuSecond() - istart;
+    printf("Executed configuration with unrolling <<< %d, %d>>> with %d in %.5f seconds\n", grid.x, block.x, offset, iElaps);
 
     // copy kernel result back to host side
     cudaMemcpy(gpuRef, d_C, nBytes, cudaMemcpyDeviceToHost);
