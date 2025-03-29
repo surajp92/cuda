@@ -1,4 +1,3 @@
-/**
 # Layer Normalization Implementation
 
 ## Overview
